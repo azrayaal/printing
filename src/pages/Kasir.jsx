@@ -4,15 +4,20 @@ import CustomerPicker from '../components/CustomerPicker'
 import ReceiptModal from '../components/ReceiptModal'
 import { useToast } from '../components/Toast'
 import {
+  checkMargin,
   createTransaction,
+  estimateFinish,
   getCashiers,
   getCustomers,
   getOutlets,
   getProducts,
   getQueues,
+  getSettings,
   logPrint,
+  resolvePrice,
 } from '../mock/api'
-import { rp, rupiah, formatTime } from '../utils/format'
+import { can } from '../mock/roles'
+import { rp, rupiah, formatTime, formatDateTime } from '../utils/format'
 import { CATEGORY_LABEL, TAX_RATE } from '../mock/seed'
 
 const PAYMENTS = [
@@ -75,6 +80,8 @@ export default function Kasir({ user }) {
 
   const [saving, setSaving] = useState(false)
   const [preview, setPreview] = useState(null) // { trx, printType, copyNumber }
+  const [setting, setSetting] = useState({ min_margin_percent: 20 })
+  const [approval, setApproval] = useState('') // nama supervisor pemberi approval
 
   const refreshQueues = useCallback(() => {
     if (outletId) getQueues(outletId).then(setQueues)
@@ -86,6 +93,7 @@ export default function Kasir({ user }) {
     getOutlets().then(setOutlets)
     refreshCustomers()
     getProducts().then(setProducts)
+    getSettings().then(setSetting)
   }, [refreshCustomers])
 
   useEffect(() => {
@@ -134,6 +142,9 @@ export default function Kasir({ user }) {
           unit_price: Number(p.price),
           qty: 1,
           discount_line: 0,
+          cost: Number(p.cost) || 0,
+          lead_time_hours: Number(p.lead_time_hours) || 0,
+          product: p,
         },
       ]
     })
@@ -155,13 +166,35 @@ export default function Kasir({ user }) {
 
   /* ------------------------------------------------------------ hitungan */
 
-  const subtotal = cart.reduce((s, l) => s + l.qty * l.unit_price - l.discount_line, 0)
+  const activeCustomer = customers.find((c) => String(c.customer_id) === String(customerId))
+  const customerType = activeCustomer?.customer_type || 'retail'
+
+  // Harga mengikuti tier quantity & tipe customer (BRD 1)
+  const pricedCart = cart.map((l) => {
+    if (!l.product) return { ...l, tier: null }
+    const pr = resolvePrice(l.product, l.qty, customerType, setting.min_margin_percent)
+    return { ...l, unit_price: pr.unit_price, tier: pr.tier }
+  })
+
+  const subtotal = pricedCart.reduce((s, l) => s + l.qty * l.unit_price - l.discount_line, 0)
   const disc = Math.min(Number(discount) || 0, subtotal)
   const tax = Math.round((subtotal - disc) * TAX_RATE * 100) / 100
   const grandTotal = Math.round((subtotal - disc + tax) * 100) / 100
   const paidNum = Number(paid) || 0
   const change = paidNum - grandTotal
-  const canPay = cart.length > 0 && cashierId && paidNum >= grandTotal && grandTotal > 0
+
+  // Pengunci margin minimal & estimasi selesai berbasis SLA (BRD 2)
+  const margin = checkMargin(pricedCart, disc, setting.min_margin_percent)
+  const sla = estimateFinish(pricedCart)
+  const perluApproval = margin.below_min || activeCustomer?.risk_level === 'blocked'
+  const bolehOverride = can(user, 'discount.override')
+
+  const canPay =
+    cart.length > 0 &&
+    cashierId &&
+    paidNum >= grandTotal &&
+    grandTotal > 0 &&
+    (!perluApproval || approval.trim().length > 2)
 
   const quickCash = useMemo(() => {
     if (!grandTotal) return []
@@ -183,7 +216,8 @@ export default function Kasir({ user }) {
         discount: disc,
         payment_method: payment,
         paid_amount: paidNum,
-        lines: cart,
+        override_by: perluApproval ? approval.trim() : null,
+        lines: pricedCart.map(({ product, tier, ...l }) => l),
       })
       const { print, transaction } = await logPrint(trx.trx_id, {
         print_type: 'original',
@@ -194,6 +228,7 @@ export default function Kasir({ user }) {
       setDiscount('')
       setPaid('')
       setQueueId('')
+      setApproval('')
       refreshQueues()
       toast(`Transaksi ${trx.pos_number} tersimpan dan tercatat di print_log.`)
     } catch (e) {
@@ -218,6 +253,31 @@ export default function Kasir({ user }) {
     <div className="grid gap-6 pt-2 xl:grid-cols-[1.55fr_1fr]">
       {/* --- kolom kiri: antrian & katalog --- */}
       <div className="space-y-6">
+        {activeCustomer?.risk_level && (
+          <div
+            className={
+              'card border-l-4 p-5 ' +
+              (activeCustomer.risk_level === 'blocked'
+                ? 'border-brand-500 bg-brand-50/60'
+                : 'border-amber-400 bg-amber-50/60')
+            }
+          >
+            <p className="text-sm font-bold uppercase tracking-wide text-ink-700">
+              {activeCustomer.risk_level === 'blocked'
+                ? 'Customer Tolak Otomatis'
+                : 'Customer Perhatian'}
+            </p>
+            <p className="mt-1 text-xs text-ink-500">
+              {activeCustomer.customer_name} — {activeCustomer.risk_reason}
+            </p>
+            {activeCustomer.risk_level === 'blocked' && (
+              <p className="mt-1 text-xs font-semibold text-brand-600">
+                Order baru diblokir sampai piutang diselesaikan atau ada approval supervisor.
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="card p-6">
           <div className="grid gap-4 sm:grid-cols-3">
             {locked ? (
@@ -464,13 +524,18 @@ export default function Kasir({ user }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {cart.map((l, i) => (
+                  {pricedCart.map((l, i) => (
                     <tr key={l.item_code}>
                       <td className="td text-center font-semibold text-brand-500">{i + 1}</td>
                       <td className="td">
                         <p className="font-medium leading-tight text-ink-700">{l.item_name}</p>
                         <p className="text-[11px] text-ink-400">
                           {l.item_code} &middot; {rupiah(l.unit_price)} / {l.uom}
+                          {l.tier && l.tier.min_qty > 1 && (
+                            <span className="ml-1 rounded bg-brand-50 px-1 py-0.5 text-[9px] font-bold text-brand-600">
+                              tier ≥{l.tier.min_qty}
+                            </span>
+                          )}
                         </p>
                         <div className="mt-1 flex items-center gap-1">
                           <span className="text-[10px] uppercase tracking-wide text-ink-300">
@@ -624,6 +689,59 @@ export default function Kasir({ user }) {
               {change < 0 ? '-' : rp(change)}
             </span>
           </div>
+
+          {cart.length > 0 && (
+            <div className="mt-4 space-y-3 rounded-xl border border-ink-300/40 p-4">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-ink-400">HPP keranjang</span>
+                <span className="font-medium text-ink-700">{rp(margin.hpp)}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-ink-400">Margin setelah diskon</span>
+                <span
+                  className={
+                    'font-bold ' + (margin.below_min ? 'text-brand-600' : 'text-emerald-600')
+                  }
+                >
+                  {margin.margin_percent}%{' '}
+                  <span className="font-normal text-ink-400">
+                    (min {setting.min_margin_percent}%)
+                  </span>
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-ink-400">Estimasi selesai (SLA)</span>
+                <span className="font-medium text-ink-700">
+                  {formatDateTime(sla.due_at)}{' '}
+                  <span className="text-ink-400">+{sla.lead_time_hours} jam</span>
+                </span>
+              </div>
+
+              {margin.below_min && (
+                <p className="rounded-lg bg-brand-50 px-3 py-2 text-[11px] leading-relaxed text-brand-600">
+                  Diskon melewati margin minimal. Maksimal diskon aman{' '}
+                  <b>{rp(margin.max_discount)}</b>, atau minta approval supervisor.
+                </p>
+              )}
+
+              {perluApproval && (
+                <div>
+                  <label className="label-xs">
+                    Approval Supervisor {bolehOverride ? '(Anda berwenang)' : ''}
+                  </label>
+                  <input
+                    className="input mt-1"
+                    placeholder="Nama supervisor pemberi persetujuan"
+                    value={approval}
+                    onChange={(e) => setApproval(e.target.value)}
+                  />
+                  <p className="mt-1 text-[11px] text-ink-400">
+                    Persetujuan ini tercatat permanen di audit log.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           <button className="btn-primary mt-5 w-full py-3" disabled={!canPay || saving} onClick={handlePay}>
             <Icon name="printer" /> {saving ? 'Menyimpan…' : 'Bayar & Cetak'}

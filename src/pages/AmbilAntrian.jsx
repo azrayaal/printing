@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
 import QueueTicket from '../components/QueueTicket'
-import { getOutlets, getQueues, takeQueue } from '../mock/api'
+import { findCustomerByPhone, getOutlets, getQueues, takeQueue } from '../mock/api'
 import { formatTime } from '../utils/format'
 
 const SERVICES = [
@@ -44,6 +44,8 @@ export default function AmbilAntrian() {
   const [outlets, setOutlets] = useState([])
   const [outletId, setOutletId] = useState(1)
   const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [known, setKnown] = useState(null) // hasil auto-pull data pelanggan
   const [queues, setQueues] = useState([])
   const [ticket, setTicket] = useState(null)
   const [busy, setBusy] = useState('')
@@ -62,6 +64,19 @@ export default function AmbilAntrian() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [outletId])
 
+  // Input antrian via nomor HP (BRD 2): tarik data pelanggan + warning blacklist
+  useEffect(() => {
+    const digits = phone.replace(/\D/g, '')
+    if (digits.length < 8) return setKnown(null)
+    const t = setTimeout(() => {
+      findCustomerByPhone(digits).then((c) => {
+        setKnown(c)
+        if (c) setName(c.customer_name)
+      })
+    }, 350)
+    return () => clearTimeout(t)
+  }, [phone])
+
   // tutup tiket otomatis setelah 25 detik agar kios siap untuk pelanggan berikutnya
   useEffect(() => {
     if (!ticket) return
@@ -72,9 +87,16 @@ export default function AmbilAntrian() {
   const take = async (code) => {
     setBusy(code)
     try {
-      const t = await takeQueue({ outlet_id: outletId, service_code: code, customer_name: name })
+      const t = await takeQueue({
+        outlet_id: outletId,
+        service_code: code,
+        customer_name: name,
+        phone,
+      })
       setTicket(t)
       setName('')
+      setPhone('')
+      setKnown(null)
       refresh()
       setTimeout(() => window.print(), 400)
     } finally {
@@ -136,16 +158,70 @@ export default function AmbilAntrian() {
           </p>
         </div>
 
-        <div className="no-print mx-auto mt-6 max-w-md">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-white/40">
-            Nama (opsional)
-          </label>
-          <input
-            className="mt-1 w-full rounded-lg border border-white/15 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-brand-400"
-            placeholder="Tulis nama Anda"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
+        <div className="no-print mx-auto mt-6 grid max-w-2xl gap-4 sm:grid-cols-2">
+          <div>
+            <label className="text-[11px] font-bold uppercase tracking-wider text-white/40">
+              Nomor HP
+            </label>
+            <input
+              inputMode="numeric"
+              className="mt-1 w-full rounded-lg border border-white/15 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-brand-400"
+              placeholder="08xxxxxxxxxx"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-bold uppercase tracking-wider text-white/40">
+              Nama (terisi otomatis bila terdaftar)
+            </label>
+            <input
+              className="mt-1 w-full rounded-lg border border-white/15 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-brand-400"
+              placeholder="Tulis nama Anda"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+
+          {known && (
+            <div
+              className={
+                'sm:col-span-2 rounded-2xl border p-4 ' +
+                (known.risk_level === 'blocked'
+                  ? 'border-brand-400 bg-brand-500/20'
+                  : known.risk_level === 'warning'
+                    ? 'border-amber-400 bg-amber-500/20'
+                    : 'border-white/15 bg-white/5')
+              }
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold">
+                    {known.customer_name}
+                    <span className="ml-2 rounded bg-white/15 px-2 py-0.5 text-[10px] font-bold uppercase">
+                      {known.customer_type}
+                    </span>
+                  </p>
+                  <p className="text-xs text-white/60">
+                    Total belanja {known.total_spent.toLocaleString('id-ID')}
+                    {known.credit_limit
+                      ? ` · piutang ${known.outstanding.toLocaleString('id-ID')} dari limit ${known.credit_limit.toLocaleString('id-ID')}`
+                      : ''}
+                  </p>
+                </div>
+                {known.risk_level && (
+                  <span className="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-bold uppercase tracking-wide">
+                    {known.risk_level === 'blocked' ? 'Tolak Otomatis' : 'Perhatian'}
+                  </span>
+                )}
+              </div>
+              {known.risk_level && (
+                <p className="mt-2 text-sm font-semibold">
+                  {known.risk_reason} — arahkan pelanggan ke kepala toko sebelum order diterima.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="no-print mt-8 grid gap-5 sm:grid-cols-2">

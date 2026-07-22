@@ -19,10 +19,18 @@
  *   GET  /api/transactions/:id/escpos
  */
 import { seed, TAX_RATE } from './seed'
+import { can, ROLES } from './roles'
 import { buildEscPos } from './escpos'
 
-const KEY = 'poc_pos_db_v2'
-const AUTH_KEY = 'poc_pos_auth_v2'
+const KEY = 'poc_pos_db'
+const AUTH_KEY = 'poc_pos_auth'
+
+/**
+ * Naikkan angka ini setiap kali struktur atau isi seed berubah.
+ * Data lama di localStorage otomatis dibuang dan diseed ulang, sehingga
+ * akun / master data baru langsung tersedia tanpa perlu clear storage manual.
+ */
+const SEED_VERSION = 3
 const LATENCY = 220 // ms | mensimulasikan round-trip jaringan
 
 const wait = (ms = LATENCY) => new Promise((r) => setTimeout(r, ms))
@@ -37,20 +45,38 @@ function ymd(date) {
 /* ------------------------------------------------------------------ store */
 
 function emptyDb() {
+  const s = clone(seed)
   return {
-    ...clone(seed),
+    __seed_version: SEED_VERSION,
+    ...s,
     pos_transaction: [],
     pos_transaction_line: [],
     print_log: [],
     queue_ticket: [],
-    sequences: { trx_id: 0, line_id: 0, print_id: 0, queue_id: 0 },
+    audit_log: [],
+    sequences: {
+      trx_id: 0,
+      line_id: 0,
+      print_id: 0,
+      queue_id: 0,
+      log_id: 0,
+      machine_id: Math.max(...s.machine.map((m) => m.machine_id)),
+      product_id: Math.max(...s.product.map((p) => p.product_id)),
+      customer_id: Math.max(...s.customer.map((c) => c.customer_id)),
+      user_id: Math.max(...s.user_account.map((u) => u.user_id)),
+    },
   }
 }
 
 function load() {
   try {
     const raw = localStorage.getItem(KEY)
-    if (raw) return JSON.parse(raw)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed?.__seed_version === SEED_VERSION) return parsed
+      // seed sudah berubah → buang data lama beserta sesi login lama
+      localStorage.removeItem(AUTH_KEY)
+    }
   } catch {
     /* korup / storage mati → jatuh ke seed */
   }
@@ -84,6 +110,7 @@ export async function login(username, password) {
     (u) => u.username.toLowerCase() === String(username).trim().toLowerCase(),
   )
   if (!user || user.password !== password) throw new Error('Username atau password salah')
+  if (user.is_active === false) throw new Error('Akun dinonaktifkan. Hubungi Owner.')
 
   const session = {
     user_id: user.user_id,
@@ -102,7 +129,17 @@ export async function login(username, password) {
 export function currentUser() {
   try {
     const raw = localStorage.getItem(AUTH_KEY)
-    return raw ? JSON.parse(raw) : null
+    if (!raw) return null
+    const sesi = JSON.parse(raw)
+    // Sesi menggantung (user sudah dihapus / data diseed ulang) dianggap keluar
+    const masih = state().user_account.find(
+      (u) => u.user_id === sesi.user_id && u.username === sesi.username && u.is_active !== false,
+    )
+    if (!masih) {
+      localStorage.removeItem(AUTH_KEY)
+      return null
+    }
+    return { ...sesi, role: masih.role }
   } catch {
     return null
   }
@@ -110,6 +147,445 @@ export function currentUser() {
 
 export function logout() {
   localStorage.removeItem(AUTH_KEY)
+}
+
+/* ---------------------------------------------------- audit log & otorisasi */
+
+/**
+ * Comprehensive Audit Log (BRD 1) — hanya bisa ditambah, tidak ada
+ * fungsi ubah maupun hapus di seluruh lapisan API ini.
+ */
+function audit(action, entity, entity_id, detail) {
+  const d = state()
+  const actor = currentUser()
+  d.audit_log.push({
+    log_id: ++d.sequences.log_id,
+    at: new Date().toISOString(),
+    actor: actor?.full_name || 'system',
+    username: actor?.username || 'system',
+    role: actor?.role || '-',
+    action, // create | update | delete | approve | login
+    entity, // machine | product | customer | user | setting | transaction | queue
+    entity_id: entity_id ?? null,
+    detail,
+  })
+}
+
+/** GET /api/audit-logs */
+export async function getAuditLogs({ entity = '', q = '' } = {}) {
+  await wait(120)
+  requireCap('audit.read')
+  const term = q.trim().toLowerCase()
+  return clone(
+    state()
+      .audit_log.filter(
+        (l) =>
+          (!entity || l.entity === entity) &&
+          (!term ||
+            l.detail.toLowerCase().includes(term) ||
+            l.actor.toLowerCase().includes(term) ||
+            l.action.includes(term)),
+      )
+      .sort((a, b) => b.log_id - a.log_id),
+  )
+}
+
+function requireCap(cap) {
+  const user = currentUser()
+  if (!can(user, cap)) throw new Error('Akses ditolak untuk peran ' + (user?.role || 'tamu'))
+  return user
+}
+
+/* --------------------------------------------------------- parameter sistem */
+
+/** GET /api/settings */
+export async function getSettings() {
+  await wait(60)
+  return clone(state().setting)
+}
+
+/** PUT /api/settings — hanya Owner */
+export async function saveSettings(patch) {
+  await wait(180)
+  requireCap('master.setting')
+  const d = state()
+  const before = clone(d.setting)
+  d.setting = { ...d.setting, ...patch }
+  const ubah = Object.keys(patch)
+    .filter((k) => before[k] !== d.setting[k])
+    .map((k) => `${k}: ${before[k]} → ${d.setting[k]}`)
+  if (ubah.length) audit('update', 'setting', null, 'Parameter sistem — ' + ubah.join(', '))
+  save(d)
+  return clone(d.setting)
+}
+
+/* --------------------------------------------------------------- master mesin */
+
+/** GET /api/machines */
+export async function getMachines(outletId) {
+  await wait(90)
+  const rows = state().machine
+  return clone(outletId ? rows.filter((m) => m.outlet_id === Number(outletId)) : rows)
+}
+
+/** POST/PUT /api/machines */
+export async function saveMachine(payload) {
+  await wait(180)
+  requireCap('master.machine')
+  const d = state()
+  if (!payload.machine_name?.trim()) throw new Error('Nama mesin wajib diisi')
+  if (!(Number(payload.capacity_per_day) > 0)) throw new Error('Kapasitas per hari harus lebih dari 0')
+
+  if (payload.machine_id) {
+    const m = d.machine.find((x) => x.machine_id === Number(payload.machine_id))
+    if (!m) throw new Error('Mesin tidak ditemukan')
+    Object.assign(m, payload, {
+      machine_id: m.machine_id,
+      capacity_per_day: Number(payload.capacity_per_day),
+      outlet_id: Number(payload.outlet_id),
+    })
+    audit('update', 'machine', m.machine_id, `Ubah mesin ${m.machine_code} — ${m.machine_name}`)
+    save(d)
+    return clone(m)
+  }
+
+  const row = {
+    ...payload,
+    machine_id: ++d.sequences.machine_id,
+    capacity_per_day: Number(payload.capacity_per_day),
+    outlet_id: Number(payload.outlet_id),
+    is_active: payload.is_active !== false,
+  }
+  d.machine.push(row)
+  audit('create', 'machine', row.machine_id, `Mesin baru ${row.machine_code} — ${row.machine_name}`)
+  save(d)
+  return clone(row)
+}
+
+/** DELETE /api/machines/:id */
+export async function deleteMachine(id) {
+  await wait(150)
+  requireCap('master.machine')
+  const d = state()
+  const m = d.machine.find((x) => x.machine_id === Number(id))
+  if (!m) throw new Error('Mesin tidak ditemukan')
+  const dipakai = d.product.filter((p) => p.machine_ids?.includes(m.machine_id))
+  if (dipakai.length)
+    throw new Error(`Mesin masih terpasang pada ${dipakai.length} produk. Lepaskan dulu.`)
+  d.machine = d.machine.filter((x) => x.machine_id !== m.machine_id)
+  audit('delete', 'machine', m.machine_id, `Hapus mesin ${m.machine_code}`)
+  save(d)
+  return true
+}
+
+/* -------------------------------------------------------------- master produk */
+
+/** POST/PUT /api/products */
+export async function saveProduct(payload) {
+  await wait(180)
+  requireCap('master.product')
+  const d = state()
+  if (!payload.item_name?.trim()) throw new Error('Nama produk wajib diisi')
+  if (!payload.item_code?.trim()) throw new Error('Kode item wajib diisi')
+  if (!(Number(payload.price) > 0)) throw new Error('Harga dasar harus lebih dari 0')
+  if (Number(payload.cost) >= Number(payload.price))
+    throw new Error('HPP tidak boleh sama atau melebihi harga dasar')
+
+  const bentrok = d.product.find(
+    (p) =>
+      p.item_code.toLowerCase() === payload.item_code.trim().toLowerCase() &&
+      p.product_id !== Number(payload.product_id),
+  )
+  if (bentrok) throw new Error('Kode item sudah dipakai produk lain')
+
+  const tiers = (payload.price_tiers || [])
+    .filter((t) => Number(t.min_qty) > 0)
+    .map((t) => ({
+      min_qty: Number(t.min_qty),
+      price_b2c: Number(t.price_b2c),
+      price_b2b: Number(t.price_b2b),
+    }))
+    .sort((a, b) => a.min_qty - b.min_qty)
+
+  const body = {
+    item_code: payload.item_code.trim().toUpperCase(),
+    item_name: payload.item_name.trim(),
+    category: payload.category || 'A',
+    uom: payload.uom || 'Pcs',
+    price: Number(payload.price),
+    cost: Number(payload.cost),
+    lead_time_hours: Number(payload.lead_time_hours) || 1,
+    machine_ids: (payload.machine_ids || []).map(Number),
+    price_tiers: tiers.length ? tiers : [{ min_qty: 1, price_b2c: Number(payload.price), price_b2b: Number(payload.price) }],
+    is_active: payload.is_active !== false,
+  }
+
+  if (payload.product_id) {
+    const p = d.product.find((x) => x.product_id === Number(payload.product_id))
+    if (!p) throw new Error('Produk tidak ditemukan')
+    const hargaLama = p.price
+    Object.assign(p, body)
+    audit(
+      'update',
+      'product',
+      p.product_id,
+      hargaLama !== p.price
+        ? `Ubah harga ${p.item_code}: ${hargaLama} → ${p.price} (beserta tier)`
+        : `Ubah produk ${p.item_code} — ${p.item_name}`,
+    )
+    save(d)
+    return clone(p)
+  }
+
+  const row = { ...body, product_id: ++d.sequences.product_id }
+  d.product.push(row)
+  audit('create', 'product', row.product_id, `Produk baru ${row.item_code} — ${row.item_name}`)
+  save(d)
+  return clone(row)
+}
+
+/** DELETE /api/products/:id */
+export async function deleteProduct(id) {
+  await wait(150)
+  requireCap('master.product')
+  const d = state()
+  const p = d.product.find((x) => x.product_id === Number(id))
+  if (!p) throw new Error('Produk tidak ditemukan')
+  d.product = d.product.filter((x) => x.product_id !== p.product_id)
+  audit('delete', 'product', p.product_id, `Hapus produk ${p.item_code}`)
+  save(d)
+  return true
+}
+
+/**
+ * Harga berlaku menurut tier quantity dan tipe customer (BRD 1).
+ * Mengembalikan { unit_price, tier, margin_percent, below_min }
+ */
+export function resolvePrice(product, qty = 1, customerType = 'retail', minMarginPercent = 0) {
+  const tiers = [...(product.price_tiers || [])].sort((a, b) => a.min_qty - b.min_qty)
+  const tier =
+    tiers.filter((t) => qty >= t.min_qty).pop() ||
+    tiers[0] || { min_qty: 1, price_b2c: product.price, price_b2b: product.price }
+  const unit_price = customerType === 'b2b' ? tier.price_b2b : tier.price_b2c
+  const margin_percent = product.cost ? ((unit_price - product.cost) / product.cost) * 100 : 100
+  return {
+    unit_price,
+    tier,
+    margin_percent: round2(margin_percent),
+    below_min: margin_percent < minMarginPercent,
+  }
+}
+
+/**
+ * Pengunci margin minimal (BRD 2). Mengembalikan info apakah harga
+ * setelah diskon masih di atas ambang yang dikonfigurasi Owner.
+ */
+export function checkMargin(lines, discount, minMarginPercent) {
+  const hpp = lines.reduce((s, l) => s + (Number(l.cost) || 0) * l.qty, 0)
+  const jual =
+    lines.reduce((s, l) => s + l.qty * l.unit_price - (l.discount_line || 0), 0) -
+    (Number(discount) || 0)
+  const margin = hpp ? ((jual - hpp) / hpp) * 100 : 100
+  const minimum = hpp * (1 + minMarginPercent / 100)
+  return {
+    hpp: round2(hpp),
+    jual: round2(jual),
+    margin_percent: round2(margin),
+    min_selling: round2(minimum),
+    max_discount: round2(Math.max(0, jual + (Number(discount) || 0) - minimum)),
+    below_min: margin < minMarginPercent,
+  }
+}
+
+/**
+ * Estimasi selesai berbasis SLA produk (BRD 2): ambil lead time
+ * terpanjang di keranjang, dihitung dari waktu order dibuat.
+ */
+export function estimateFinish(lines, from = new Date()) {
+  const jam = Math.max(0, ...lines.map((l) => Number(l.lead_time_hours) || 0))
+  const due = new Date(from)
+  due.setHours(due.getHours() + jam)
+  return { lead_time_hours: jam, due_at: due.toISOString() }
+}
+
+/* ------------------------------------------------------------ master customer */
+
+/** POST/PUT /api/customers */
+export async function saveCustomer(payload) {
+  await wait(180)
+  const d = state()
+  const user = currentUser()
+  const name = String(payload.customer_name || '').trim()
+  if (!name) throw new Error('Nama pelanggan wajib diisi')
+
+  const editing = payload.customer_id
+    ? d.customer.find((c) => c.customer_id === Number(payload.customer_id))
+    : null
+  if (payload.customer_id && !editing) throw new Error('Pelanggan tidak ditemukan')
+
+  // Perubahan blacklist & kredit limit butuh wewenang khusus
+  const ubahBlacklist =
+    editing && (editing.blacklist_level || null) !== (payload.blacklist_level || null)
+  const ubahLimit = editing && Number(editing.credit_limit) !== Number(payload.credit_limit || 0)
+  if ((ubahBlacklist || ubahLimit) && !can(user, 'blacklist.manage'))
+    throw new Error('Hanya Kepala Toko atau Owner yang boleh mengubah blacklist / kredit limit')
+
+  const body = {
+    customer_name: name,
+    phone: String(payload.phone || '').trim() || null,
+    customer_type: payload.customer_type === 'b2b' ? 'b2b' : 'retail',
+    credit_limit: Number(payload.credit_limit) || 0,
+    blacklist_level: payload.blacklist_level || null, // null | warning | blocked
+    blacklist_reason: payload.blacklist_reason?.trim() || null,
+  }
+  if (body.blacklist_level && !body.blacklist_reason)
+    throw new Error('Alasan blacklist wajib dicatat')
+
+  if (editing) {
+    Object.assign(editing, body)
+    if (ubahBlacklist)
+      audit(
+        'update',
+        'customer',
+        editing.customer_id,
+        `Blacklist ${editing.customer_name} → ${body.blacklist_level || 'dicabut'}${body.blacklist_reason ? ' (' + body.blacklist_reason + ')' : ''}`,
+      )
+    else audit('update', 'customer', editing.customer_id, `Ubah data ${editing.customer_name}`)
+    save(d)
+    return clone(editing)
+  }
+
+  const kembar = d.customer.find(
+    (c) =>
+      c.customer_name.toLowerCase() === name.toLowerCase() ||
+      (body.phone && c.phone === body.phone),
+  )
+  if (kembar) return clone(kembar)
+
+  const row = {
+    ...body,
+    customer_id: ++d.sequences.customer_id,
+    outstanding: 0,
+    total_spent: 0,
+    credit_limit:
+      body.customer_type === 'b2b' && !body.credit_limit
+        ? d.setting.default_credit_limit
+        : body.credit_limit,
+  }
+  d.customer.push(row)
+  audit('create', 'customer', row.customer_id, `Pelanggan baru ${row.customer_name}`)
+  save(d)
+  return clone(row)
+}
+
+/** GET /api/customers/by-phone/:phone — auto-pull data saat input antrian */
+export async function findCustomerByPhone(phone) {
+  await wait(120)
+  const t = String(phone || '').replace(/\D/g, '')
+  if (!t) return null
+  const d = state()
+  const c = d.customer.find((x) => (x.phone || '').replace(/\D/g, '') === t)
+  return c ? clone(withRisk(c, d.setting)) : null
+}
+
+/** Status risiko customer: blacklist manual + otomatis dari piutang (BRD 6). */
+export function withRisk(c, setting) {
+  const limit = Number(c.credit_limit) || 0
+  const ar = Number(c.outstanding) || 0
+  const rasio = limit ? (ar / limit) * 100 : 0
+  const otomatis = limit > 0 && rasio >= (setting?.ar_block_percent ?? 100)
+  const level = c.blacklist_level || (otomatis ? 'blocked' : null)
+  return {
+    ...c,
+    ar_ratio: round2(rasio),
+    auto_blocked: otomatis,
+    risk_level: level,
+    risk_reason:
+      c.blacklist_reason ||
+      (otomatis ? `Piutang ${ar.toLocaleString('id-ID')} melampaui kredit limit` : null),
+  }
+}
+
+/* ------------------------------------------------------------------ user mgmt */
+
+/** GET /api/users */
+export async function getUsers() {
+  await wait(110)
+  requireCap('master.user')
+  return clone(state().user_account.map(({ password, ...u }) => ({ ...u, has_password: !!password })))
+}
+
+/** POST/PUT /api/users — hanya Owner */
+export async function saveUser(payload) {
+  await wait(200)
+  requireCap('master.user')
+  const d = state()
+  const username = String(payload.username || '').trim().toLowerCase()
+  if (!username) throw new Error('Username wajib diisi')
+  if (!payload.full_name?.trim()) throw new Error('Nama lengkap wajib diisi')
+  if (!ROLES.includes(payload.role)) throw new Error('Peran tidak dikenal')
+
+  const bentrok = d.user_account.find(
+    (u) => u.username === username && u.user_id !== Number(payload.user_id),
+  )
+  if (bentrok) throw new Error('Username sudah dipakai')
+
+  if (payload.user_id) {
+    const u = d.user_account.find((x) => x.user_id === Number(payload.user_id))
+    if (!u) throw new Error('User tidak ditemukan')
+    const perananLama = u.role
+    Object.assign(u, {
+      username,
+      full_name: payload.full_name.trim(),
+      role: payload.role,
+      outlet_id: Number(payload.outlet_id) || u.outlet_id,
+      cashier_id: payload.cashier_id ? Number(payload.cashier_id) : null,
+      is_active: payload.is_active !== false,
+    })
+    if (payload.password) u.password = payload.password
+    audit(
+      'update',
+      'user',
+      u.user_id,
+      perananLama !== u.role
+        ? `Ubah peran ${u.username}: ${perananLama} → ${u.role}`
+        : `Ubah user ${u.username}${payload.password ? ' (password direset)' : ''}`,
+    )
+    save(d)
+    return clone({ ...u, password: undefined })
+  }
+
+  if (!payload.password) throw new Error('Password awal wajib diisi')
+  const row = {
+    user_id: ++d.sequences.user_id,
+    username,
+    password: payload.password,
+    full_name: payload.full_name.trim(),
+    role: payload.role,
+    outlet_id: Number(payload.outlet_id) || 1,
+    cashier_id: payload.cashier_id ? Number(payload.cashier_id) : null,
+    is_active: payload.is_active !== false,
+  }
+  d.user_account.push(row)
+  audit('create', 'user', row.user_id, `User baru ${row.username} sebagai ${row.role}`)
+  save(d)
+  return clone({ ...row, password: undefined })
+}
+
+/** DELETE /api/users/:id — Owner terakhir tidak boleh dihapus */
+export async function deleteUser(id) {
+  await wait(160)
+  const me = requireCap('master.user')
+  const d = state()
+  const u = d.user_account.find((x) => x.user_id === Number(id))
+  if (!u) throw new Error('User tidak ditemukan')
+  if (u.user_id === me.user_id) throw new Error('Tidak dapat menghapus akun sendiri')
+  if (u.role === 'Owner' && d.user_account.filter((x) => x.role === 'Owner').length <= 1)
+    throw new Error('Minimal harus ada satu akun Owner')
+  d.user_account = d.user_account.filter((x) => x.user_id !== u.user_id)
+  audit('delete', 'user', u.user_id, `Hapus user ${u.username}`)
+  save(d)
+  return true
 }
 
 /* ------------------------------------------------ nomor & trigger sintetis */
@@ -161,29 +637,13 @@ export async function getCashiers(outletId) {
 
 export async function getCustomers() {
   await wait(80)
-  return clone(state().customer)
+  const d = state()
+  return clone(d.customer.map((c) => withRisk(c, d.setting)))
 }
 
-/** POST /api/customers | daftarkan pelanggan baru dari layar kasir */
-export async function createCustomer({ customer_name, phone = '' }) {
-  await wait(140)
-  const d = state()
-  const name = String(customer_name || '').trim()
-  if (!name) throw new Error('Nama pelanggan wajib diisi')
-
-  const existing = d.customer.find(
-    (c) => c.customer_name.toLowerCase() === name.toLowerCase(),
-  )
-  if (existing) return clone(existing)
-
-  const row = {
-    customer_id: Math.max(...d.customer.map((c) => c.customer_id)) + 1,
-    customer_name: name,
-    phone: phone.trim() || null,
-  }
-  d.customer.push(row)
-  save(d)
-  return clone(row)
+/** POST /api/customers | pintasan pendaftaran cepat dari layar kasir */
+export async function createCustomer({ customer_name, phone = '', customer_type = 'retail' }) {
+  return saveCustomer({ customer_name, phone, customer_type })
 }
 
 export async function getServices() {
@@ -206,7 +666,7 @@ export async function getProducts(q = '') {
 /* ----------------------------------------------------------------- antrian */
 
 /** POST /api/queues | kios pengambilan nomor antrian */
-export async function takeQueue({ outlet_id, service_code, customer_name = '' }) {
+export async function takeQueue({ outlet_id, service_code, customer_name = '', phone = '' }) {
   await wait(260)
   const d = state()
   const outlet = d.outlet.find((o) => o.outlet_id === Number(outlet_id))
@@ -219,13 +679,22 @@ export async function takeQueue({ outlet_id, service_code, customer_name = '' })
     (q) => q.outlet_id === outlet.outlet_id && q.status === 'waiting' && ymd(q.created_at) === ymd(now),
   ).length
 
+  // Input antrian via nomor HP (BRD 2): tarik data pelanggan bila terdaftar
+  const digits = String(phone || '').replace(/\D/g, '')
+  const pelanggan = digits
+    ? d.customer.find((c) => (c.phone || '').replace(/\D/g, '') === digits)
+    : null
+  const risiko = pelanggan ? withRisk(pelanggan, d.setting) : null
+
   const ticket = {
     queue_id: ++d.sequences.queue_id,
     queue_number: generateQueueNumber(d, outlet.outlet_id, service.service_code, now),
     outlet_id: outlet.outlet_id,
     service_code: service.service_code,
     service_name: service.service_name,
-    customer_name: customer_name.trim() || null,
+    phone: digits || null,
+    customer_id: pelanggan?.customer_id || null,
+    customer_name: pelanggan?.customer_name || customer_name.trim() || null,
     status: 'waiting', // waiting → called → served | skipped
     created_at: now,
     called_at: null,
@@ -237,7 +706,13 @@ export async function takeQueue({ outlet_id, service_code, customer_name = '' })
   d.queue_ticket.push(ticket)
   save(d)
 
-  return clone({ ...ticket, outlet, waiting_ahead: waitingAhead, estimate_minutes: waitingAhead * 4 })
+  return clone({
+    ...ticket,
+    outlet,
+    customer: risiko,
+    waiting_ahead: waitingAhead,
+    estimate_minutes: waitingAhead * 4,
+  })
 }
 
 /** GET /api/queues?outlet_id=&date=today */
@@ -338,6 +813,23 @@ export async function createTransaction(payload) {
     ? d.queue_ticket.find((q) => q.queue_id === Number(payload.queue_id))
     : null
 
+  // Blokir order untuk customer blacklist / piutang lewat batas (BRD 6)
+  const pelanggan = d.customer.find((c) => c.customer_id === (Number(payload.customer_id) || 1))
+  const risiko = pelanggan ? withRisk(pelanggan, d.setting) : null
+  if (risiko?.risk_level === 'blocked' && !payload.override_by)
+    throw new Error(
+      `Order ditolak: ${risiko.customer_name} berstatus blokir — ${risiko.risk_reason}. Butuh persetujuan supervisor.`,
+    )
+
+  // Pengunci margin minimal (BRD 2)
+  const marginInfo = checkMargin(payload.lines, discount, d.setting.min_margin_percent)
+  if (marginInfo.below_min && !payload.override_by)
+    throw new Error(
+      `Diskon melewati margin minimal ${d.setting.min_margin_percent}%. Maksimal diskon ${Math.floor(marginInfo.max_discount).toLocaleString('id-ID')}. Butuh approval supervisor.`,
+    )
+
+  const sla = estimateFinish(payload.lines, new Date(trxDate))
+
   const trx = {
     trx_id: ++d.sequences.trx_id,
     pos_number: generatePosNumber(d, outlet, trxDate),
@@ -351,6 +843,11 @@ export async function createTransaction(payload) {
     tax,
     grand_total: grandTotal,
     payment_method: payload.payment_method || 'cash',
+    hpp_total: marginInfo.hpp,
+    margin_percent: marginInfo.margin_percent,
+    lead_time_hours: sla.lead_time_hours,
+    due_at: sla.due_at,
+    approved_by: payload.override_by || null,
     paid_amount: paid,
     change_amount: round2(paid - grandTotal),
     status: 'paid',
@@ -379,6 +876,15 @@ export async function createTransaction(payload) {
     queue.trx_id = trx.trx_id
     queue.cashier_id = cashier.cashier_id
   }
+
+  if (payload.override_by)
+    audit(
+      'approve',
+      'transaction',
+      trx.trx_id,
+      `Approval ${payload.override_by} atas ${trx.pos_number} (margin ${marginInfo.margin_percent}%${risiko?.risk_level === 'blocked' ? ', customer blokir' : ''})`,
+    )
+  audit('create', 'transaction', trx.trx_id, `Order ${trx.pos_number} — total ${trx.grand_total}`)
 
   save(d)
   return getTransaction(trx.trx_id)

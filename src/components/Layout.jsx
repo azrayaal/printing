@@ -1,22 +1,51 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import Icon from './Icon'
+import { can, isSuperAdmin } from '../mock/roles'
 
 const groups = [
   {
     title: 'Menu',
     items: [
-      { to: '/', label: 'Dashboard', icon: 'dashboard', end: true },
-      { to: '/kasir', label: 'Kasir', icon: 'cart' },
-      { to: '/riwayat', label: 'Riwayat Transaksi', icon: 'receipt' },
+      { to: '/', label: 'Dashboard', icon: 'dashboard', end: true, cap: 'dashboard' },
+      { to: '/kasir', label: 'Kasir', icon: 'cart', cap: 'kasir' },
+      { to: '/riwayat', label: 'Riwayat Transaksi', icon: 'receipt', cap: 'riwayat' },
     ],
   },
   {
     title: 'Antrian',
     items: [
-      { to: '/antrian/layar', label: 'Nomor Antrian', icon: 'bell' },
-      { to: '/antrian/display', label: 'Papan Layar Tunggu', icon: 'dashboard', external: true },
-      { to: '/antrian/ambil', label: 'Kios Ambil Antrian', icon: 'store', external: true },
+      { to: '/antrian/layar', label: 'Nomor Antrian', icon: 'bell', cap: 'antrian' },
+      {
+        to: '/antrian/display',
+        label: 'Papan Layar Tunggu',
+        icon: 'dashboard',
+        external: true,
+        cap: 'antrian',
+      },
+      {
+        to: '/antrian/ambil',
+        label: 'Kios Ambil Antrian',
+        icon: 'store',
+        external: true,
+        cap: 'antrian',
+      },
+    ],
+  },
+  {
+    title: 'Master Data',
+    items: [
+      { to: '/master/mesin', label: 'Master Mesin', icon: 'settings', cap: 'master.machine' },
+      { to: '/master/produk', label: 'Produk & Harga', icon: 'money', cap: 'master.product' },
+      { to: '/master/customer', label: 'Customer', icon: 'user', cap: 'master.customer' },
+    ],
+  },
+  {
+    title: 'Administrasi',
+    items: [
+      { to: '/master/user', label: 'User & Role', icon: 'user', cap: 'master.user' },
+      { to: '/master/pengaturan', label: 'Parameter Sistem', icon: 'settings', cap: 'master.setting' },
+      { to: '/audit', label: 'Audit Log', icon: 'receipt', cap: 'audit.read' },
     ],
   },
 ]
@@ -26,6 +55,12 @@ const crumbs = {
   '/kasir': ['Transaksi', 'Kasir'],
   '/riwayat': ['Transaksi', 'Riwayat'],
   '/antrian/layar': ['Antrian', 'Nomor Antrian'],
+  '/master/mesin': ['Master Data', 'Mesin Cetak'],
+  '/master/produk': ['Master Data', 'Produk & Harga'],
+  '/master/customer': ['Master Data', 'Customer'],
+  '/master/user': ['Administrasi', 'User & Role'],
+  '/master/pengaturan': ['Administrasi', 'Parameter Sistem'],
+  '/audit': ['Administrasi', 'Audit Log'],
 }
 
 function SidebarLink({ item, onNavigate }) {
@@ -121,12 +156,18 @@ export default function Layout({ children, user, outlet, onLogout }) {
             <span className="block text-xs font-semibold text-white">
               {user?.full_name || 'Pengguna'}
             </span>
-            <span className="block text-[11px] text-white/50">{user?.role}</span>
+            <span className="block text-[11px] text-white/50">
+              {user?.role}
+              {isSuperAdmin(user) ? ' · super admin' : ''}
+            </span>
           </span>
           <Icon name="chevron" className={'h-4 w-4 text-white/50 transition ' + (menu ? 'rotate-180' : '')} />
         </button>
 
-        {groups.map((g) => (
+        {groups
+          .map((g) => ({ ...g, items: g.items.filter((i) => can(user, i.cap)) }))
+          .filter((g) => g.items.length)
+          .map((g) => (
           <div key={g.title}>
             <p className="px-4 pb-2 pt-6 text-[11px] font-bold uppercase tracking-wider text-white/40">
               {g.title}

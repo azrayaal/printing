@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import Icon from '../components/Icon'
-import { login } from '../mock/api'
+import { login, resetDatabase } from '../mock/api'
 
 const DEMO = [
-  { username: 'rina', password: 'kasir123', role: 'Kasir | Loket 1' },
-  { username: 'budi', password: 'kasir123', role: 'Kasir | Loket 2' },
-  { username: 'supervisor', password: 'admin123', role: 'Supervisor' },
+  { username: 'owner', password: 'owner123', role: 'Owner | super admin' },
+  { username: 'kepala', password: 'toko123', role: 'Kepala Toko' },
+  { username: 'rina', password: 'kasir123', role: 'Admin/Kasir | Loket 1' },
+  // { username: 'cs', password: 'cs123', role: 'CS/Desainer' },
+  { username: 'operator', password: 'operator123', role: 'Operator produksi' },
 ]
 
 export default function Login({ onLogin }) {
@@ -147,6 +149,22 @@ export default function Login({ onLogin }) {
             </div>
           </div>
         </main>
+
+        <div className="relative mx-auto -mt-2 max-w-sm px-4 pb-2 text-center">
+          <button
+            type="button"
+            onClick={() => {
+              resetDatabase()
+              setError('')
+              setUsername('')
+              setPassword('')
+              alert('Data demo dimuat ulang. Silakan masuk kembali.')
+            }}
+            className="text-[11px] text-white/40 underline decoration-dotted hover:text-white/70"
+          >
+            Muat ulang data demo bila akun tidak dikenali
+          </button>
+        </div>
 
         <footer className="relative px-6 pb-6 text-center text-[11px] text-white/40">
           POC POS Invoice Printing | modul ERP. Data demo tersimpan lokal di browser.
