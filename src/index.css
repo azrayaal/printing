@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-canvas text-ink-700 antialiased;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl bg-white shadow-card;
+  }
+  .label-xs {
+    @apply text-[11px] font-bold uppercase tracking-wide text-ink-400;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-brand-grad text-white shadow-raised hover:opacity-95 active:scale-[.99];
+  }
+  .btn-dark {
+    @apply btn bg-dark-grad text-white shadow-soft hover:opacity-95;
+  }
+  .btn-ghost {
+    @apply btn border border-ink-300/60 text-ink-500 hover:border-brand-500 hover:text-brand-500;
+  }
+  .input {
+    @apply w-full rounded-lg border border-ink-300/70 bg-white px-3 py-2 text-sm text-ink-700 outline-none transition placeholder:text-ink-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15;
+  }
+  .th {
+    @apply px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-ink-400;
+  }
+  .td {
+    @apply border-t border-ink-300/25 px-4 py-3 text-sm;
+  }
+}
+
+/* ---------- Thermal receipt 80mm ---------- */
+.receipt {
+  width: 80mm;
+  padding: 6mm 5mm;
+  background: #fff;
+  color: #000;
+  font-family: 'Roboto Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.receipt hr {
+  border: 0;
+  border-top: 1px dashed #000;
+  margin: 6px 0;
+}
+.receipt .rule-double {
+  border-top: 3px double #000;
+  margin: 6px 0;
+}
+
+.print-only {
+  display: none;
+}
+
+@media print {
+  .print-only {
+    display: block !important;
+  }
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+  body * {
+    visibility: hidden !important;
+  }
+  #receipt-print,
+  #receipt-print * {
+    visibility: visible !important;
+  }
+  #receipt-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm;
+    box-shadow: none !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
