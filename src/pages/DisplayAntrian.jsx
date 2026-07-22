@@ -161,7 +161,7 @@ export default function DisplayAntrian() {
                 (flash ? 'animate-pulse' : '')
               }
             >
-              {current?.queue_number || '—'}
+              {current?.queue_number || '|'}
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-4">
@@ -242,7 +242,7 @@ export default function DisplayAntrian() {
                 </p>
               </div>
               <p className={'text-5xl font-bold ' + (c.ticket ? 'text-white' : 'text-white/15')}>
-                {c.ticket?.queue_number || '—'}
+                {c.ticket?.queue_number || '|'}
               </p>
             </div>
           ))}

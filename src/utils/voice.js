@@ -1,5 +1,5 @@
 /**
- * Panggilan suara antrian — memakai Web Speech API bawaan browser,
+ * Panggilan suara antrian | memakai Web Speech API bawaan browser,
  * jadi tetap berjalan offline tanpa layanan eksternal.
  *
  * Contoh keluaran untuk nomor "B-020" di Loket 2:

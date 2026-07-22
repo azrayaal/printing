@@ -4,8 +4,8 @@ import Icon from '../components/Icon'
 import { login } from '../mock/api'
 
 const DEMO = [
-  { username: 'rina', password: 'kasir123', role: 'Kasir — Loket 1' },
-  { username: 'budi', password: 'kasir123', role: 'Kasir — Loket 2' },
+  { username: 'rina', password: 'kasir123', role: 'Kasir | Loket 1' },
+  { username: 'budi', password: 'kasir123', role: 'Kasir | Loket 2' },
   { username: 'supervisor', password: 'admin123', role: 'Supervisor' },
 ]
 
@@ -43,16 +43,16 @@ export default function Login({ onLogin }) {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-ink-900">
-      {/* latar dekoratif — gradient murni, tanpa aset eksternal */}
+      {/* latar dekoratif | gradient murni, tanpa aset eksternal */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,#3b3f6b_0%,transparent_55%),radial-gradient(circle_at_85%_80%,#d81b60_0%,transparent_50%),linear-gradient(160deg,#101322,#1a2035_60%,#241a2d)]" />
       <div className="absolute inset-0 opacity-[0.07] [background-image:linear-gradient(#fff_1px,transparent_1px),linear-gradient(90deg,#fff_1px,transparent_1px)] [background-size:48px_48px]" />
 
       <div className="relative flex min-h-screen flex-col">
         <header className="flex items-center justify-between px-6 py-6 sm:px-12">
           <div className="flex items-center gap-3 text-white">
-            <span className="grid h-9 w-9 place-items-center rounded-lg bg-brand-grad">
+            {/* <span className="grid h-9 w-9 place-items-center rounded-lg bg-brand-grad">
               <Icon name="printer" className="h-5 w-5" />
-            </span>
+            </span> */}
             <div className="leading-tight">
               <p className="text-sm font-semibold">Sumber Jaya Digital Printing</p>
               <p className="text-[11px] text-white/50">POS Invoice &amp; Antrian</p>
@@ -126,7 +126,7 @@ export default function Login({ onLogin }) {
 
             <div className="mt-6 rounded-2xl bg-white/5 p-4 backdrop-blur">
               <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">
-                Akun demo — klik untuk mengisi
+                Akun demo | klik untuk mengisi
               </p>
               <div className="mt-3 space-y-2">
                 {DEMO.map((a) => (
@@ -149,7 +149,7 @@ export default function Login({ onLogin }) {
         </main>
 
         <footer className="relative px-6 pb-6 text-center text-[11px] text-white/40">
-          POC POS Invoice Printing — modul ERP. Data demo tersimpan lokal di browser.
+          POC POS Invoice Printing | modul ERP. Data demo tersimpan lokal di browser.
         </footer>
       </div>
     </div>

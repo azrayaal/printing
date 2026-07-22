@@ -114,7 +114,7 @@ export default function CustomerPicker({ customers, value, onChange, onCreated }
                     }
                   >
                     <span className="text-sm text-ink-700">{c.customer_name}</span>
-                    <span className="text-[11px] text-ink-400">{c.phone || '—'}</span>
+                    <span className="text-[11px] text-ink-400">{c.phone || '|'}</span>
                   </button>
                 ))}
                 {!filtered.length && (

@@ -9,35 +9,35 @@ const SERVICES = [
   {
     code: 'A',
     name: 'Cetak Dokumen',
-    desc: 'A4, F4, A5, A3 — hitam putih maupun full color, scan dokumen',
-    grad: 'bg-info-grad',
+    desc: 'A4, F4, A5, A3 | hitam putih maupun full color, scan dokumen',
+    tone: 'bg-info-grad',
     icon: 'receipt',
   },
   {
     code: 'B',
     name: 'Cetak Foto',
     desc: 'Pas foto 2x3 / 3x4 / 4x6, cetak foto 4x4, 4R, 10R, edit foto',
-    grad: 'bg-brand-grad',
+    tone: 'bg-brand-grad',
     icon: 'copy',
   },
   {
     code: 'C',
     name: 'Desain & Custom',
     desc: 'Desain custom, undangan, banner, stiker, kartu nama, mug, kaos',
-    grad: 'bg-warn-grad',
+    tone: 'bg-warn-grad',
     icon: 'code',
   },
   {
     code: 'D',
     name: 'Ambil Pesanan',
     desc: 'Pengambilan hasil cetak, jilid, dan laminating yang sudah selesai',
-    grad: 'bg-success-grad',
+    tone: 'bg-success-grad',
     icon: 'store',
   },
 ]
 
 /**
- * Layar kios untuk pelanggan — dipakai tanpa login, biasanya dipasang
+ * Layar kios untuk pelanggan | dipakai tanpa login, biasanya dipasang
  * pada tablet di pintu masuk toko.
  */
 export default function AmbilAntrian() {
@@ -159,7 +159,7 @@ export default function AmbilAntrian() {
                 className="group rounded-2xl border border-white/10 bg-white/[0.04] p-6 text-left transition hover:-translate-y-1 hover:border-white/25 hover:bg-white/[0.08] disabled:opacity-60"
               >
                 <div className="flex items-start justify-between">
-                  <span className={`grid h-14 w-14 place-items-center rounded-xl ${s.grad}`}>
+                  <span className={`grid h-14 w-14 place-items-center rounded-xl ${s.tone}`}>
                     <Icon name={s.icon} className="h-6 w-6" />
                   </span>
                   <span className="text-4xl font-bold tracking-tight text-white/25 group-hover:text-white/40">

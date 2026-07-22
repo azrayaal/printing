@@ -42,7 +42,7 @@ function LockedField({ label, icon, value, note }) {
         </span>
         <span className="min-w-0 leading-tight">
           <span className="block truncate text-sm font-medium text-ink-700">{value}</span>
-          <span className="block truncate text-[11px] text-ink-400">{note || '—'}</span>
+          <span className="block truncate text-[11px] text-ink-400">{note || '|'}</span>
         </span>
       </div>
     </div>
@@ -227,7 +227,7 @@ export default function Kasir({ user }) {
                   icon="store"
                   value={
                     activeOutlet
-                      ? `${activeOutlet.outlet_code} — ${activeOutlet.outlet_name}`
+                      ? `${activeOutlet.outlet_code} | ${activeOutlet.outlet_name}`
                       : 'Memuat…'
                   }
                   note={activeOutlet?.address}
@@ -235,7 +235,7 @@ export default function Kasir({ user }) {
                 <LockedField
                   label="Kasir Bertugas"
                   icon="user"
-                  value={activeCashier?.cashier_name || user?.full_name || '—'}
+                  value={activeCashier?.cashier_name || user?.full_name || '|'}
                   note={activeCashier?.counter ? `${activeCashier.counter} · ${user?.role}` : user?.role}
                 />
               </>

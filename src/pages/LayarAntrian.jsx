@@ -99,7 +99,7 @@ export default function LayarAntrian() {
               Sedang dipanggil
             </p>
             <p className="mt-3 text-[92px] font-bold leading-none tracking-tight">
-              {current?.queue_number || '—'}
+              {current?.queue_number || '|'}
             </p>
             <p className="mt-2 text-lg text-white/70">
               {current ? `${current.service_name} · ${current.counter}` : 'Belum ada panggilan'}
@@ -157,10 +157,10 @@ export default function LayarAntrian() {
               onChange={(e) => setFilter(e.target.value)}
             >
               <option value="">Semua layanan</option>
-              <option value="A">A — Cetak Dokumen</option>
-              <option value="B">B — Cetak Foto</option>
-              <option value="C">C — Desain &amp; Custom</option>
-              <option value="D">D — Ambil Pesanan</option>
+              <option value="A">A | Cetak Dokumen</option>
+              <option value="B">B | Cetak Foto</option>
+              <option value="C">C | Desain &amp; Custom</option>
+              <option value="D">D | Ambil Pesanan</option>
             </select>
           </div>
           <button className="btn-primary" onClick={call}>
@@ -205,9 +205,9 @@ export default function LayarAntrian() {
           ['Dipanggil', called.length, 'bg-info-grad'],
           ['Selesai', served.length, 'bg-success-grad'],
           ['Total Hari Ini', queues.length, 'bg-dark-grad'],
-        ].map(([label, val, grad]) => (
+        ].map(([label, val, tone]) => (
           <div key={label} className="card flex items-center gap-4 p-5">
-            <span className={`grid h-12 w-12 place-items-center rounded-xl text-white ${grad}`}>
+            <span className={`grid h-12 w-12 place-items-center rounded-xl text-white ${tone}`}>
               <Icon name="receipt" className="h-5 w-5" />
             </span>
             <div>
@@ -255,10 +255,10 @@ export default function LayarAntrian() {
                     </span>
                   </td>
                   <td className="td text-ink-500">{q.service_name}</td>
-                  <td className="td text-ink-500">{q.customer_name || '—'}</td>
+                  <td className="td text-ink-500">{q.customer_name || '|'}</td>
                   <td className="td text-ink-500">{formatTime(q.created_at)}</td>
-                  <td className="td text-ink-500">{q.counter || '—'}</td>
-                  <td className="td text-ink-500">{q.cashier_name || '—'}</td>
+                  <td className="td text-ink-500">{q.counter || '|'}</td>
+                  <td className="td text-ink-500">{q.cashier_name || '|'}</td>
                   <td className="td text-center">
                     <span
                       className={

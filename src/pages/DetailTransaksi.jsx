@@ -93,10 +93,10 @@ export default function DetailTransaksi() {
 
             <div className="grid gap-5 px-6 py-5 sm:grid-cols-3">
               <Info label="Tanggal" value={formatDateTime(trx.trx_date)} />
-              <Info label="Outlet" value={`${trx.outlet.outlet_code} — ${trx.outlet.outlet_name}`} />
+              <Info label="Outlet" value={`${trx.outlet.outlet_code} | ${trx.outlet.outlet_name}`} />
               <Info label="Kasir" value={trx.cashier.cashier_name} />
               <Info label="Pelanggan" value={trx.customer?.customer_name || 'Umum'} />
-              <Info label="No. Antrian" value={trx.queue_number || '—'} />
+              <Info label="No. Antrian" value={trx.queue_number || '|'} />
               <Info label="Metode Bayar" value={trx.payment_method.toUpperCase()} />
               <Info label="Status Sync Odoo" value={trx.odoo_sync_status} />
             </div>

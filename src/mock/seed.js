@@ -1,4 +1,4 @@
-// Data seed — mencerminkan isi backend/db/seed.sql
+// Data seed | mencerminkan isi backend/db/seed.sql
 export const seed = {
   outlet: [
     {
@@ -23,7 +23,7 @@ export const seed = {
     { cashier_id: 3, cashier_name: 'Sari Amelia', outlet_id: 2, counter: 'Loket 1' },
   ],
 
-  // Akun demo — password sengaja ditampilkan di halaman login untuk POC
+  // Akun demo | password sengaja ditampilkan di halaman login untuk POC
   user_account: [
     {
       user_id: 1,

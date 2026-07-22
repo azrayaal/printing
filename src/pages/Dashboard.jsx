@@ -4,12 +4,12 @@ import Icon from '../components/Icon'
 import { getQueues, getTransactions } from '../mock/api'
 import { formatDateTime, formatTime, isToday, rp } from '../utils/format'
 
-function StatCard({ icon, grad, label, value, foot }) {
+function StatCard({ icon, tone, label, value, foot }) {
   return (
     <div className="card relative px-4 pb-4 pt-4">
       <div className="flex items-start justify-between">
         <span
-          className={`-mt-8 grid h-14 w-14 place-items-center rounded-xl text-white shadow-soft ${grad}`}
+          className={`-mt-8 grid h-14 w-14 place-items-center rounded-xl text-white shadow-soft ${tone}`}
         >
           <Icon name={icon} className="h-6 w-6" />
         </span>
@@ -43,28 +43,28 @@ export default function Dashboard() {
       <div className="grid gap-6 pt-8 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           icon="receipt"
-          grad="bg-dark-grad"
+          tone="bg-dark-grad"
           label="Transaksi Hari Ini"
           value={today.length}
           foot={`${rows.length} transaksi total tercatat`}
         />
         <StatCard
           icon="money"
-          grad="bg-brand-grad"
+          tone="bg-brand-grad"
           label="Omzet Hari Ini"
           value={rp(omzetToday)}
           foot="Termasuk pajak 11%"
         />
         <StatCard
           icon="printer"
-          grad="bg-success-grad"
+          tone="bg-success-grad"
           label="Struk Dicetak"
           value={printsToday}
           foot="Tercatat di tabel print_log"
         />
         <StatCard
           icon="bell"
-          grad="bg-info-grad"
+          tone="bg-info-grad"
           label="Antrian Menunggu"
           value={waiting.length}
           foot={`${called.length} sedang dipanggil · ${queues.length} tiket hari ini`}
@@ -125,7 +125,7 @@ export default function Dashboard() {
             <div>
               <p className="text-[11px] uppercase tracking-wider text-white/50">Sedang dipanggil</p>
               <p className="text-3xl font-bold leading-tight">
-                {called[called.length - 1]?.queue_number || '—'}
+                {called[called.length - 1]?.queue_number || '|'}
               </p>
             </div>
             <Link to="/antrian/layar" className="btn bg-white/10 text-white hover:bg-white/20">

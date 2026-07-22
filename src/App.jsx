@@ -35,12 +35,12 @@ export default function App() {
   return (
     <ToastProvider>
       <Routes>
-        {/* halaman publik — tanpa sidebar */}
+        {/* halaman publik | tanpa sidebar */}
         <Route path="/login" element={<Login onLogin={setUser} />} />
         <Route path="/antrian/ambil" element={<AmbilAntrian />} />
         <Route path="/antrian/display" element={<DisplayAntrian />} />
 
-        {/* halaman internal — perlu login */}
+        {/* halaman internal | perlu login */}
         <Route
           path="*"
           element={

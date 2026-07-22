@@ -100,9 +100,9 @@ export default function Layout({ children, user, outlet, onLogout }) {
         ].join(' ')}
       >
         <div className="flex items-center gap-3 px-2 pb-4">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-brand-grad text-white">
+          {/* <span className="grid h-9 w-9 place-items-center rounded-lg bg-brand-grad text-white">
             <Icon name="printer" className="h-5 w-5" />
-          </span>
+          </span> */}
           <div className="leading-tight">
             <p className="text-sm font-semibold text-white">POS Printing</p>
             <p className="text-[11px] text-white/50">ERP Invoice Module</p>
@@ -126,23 +126,6 @@ export default function Layout({ children, user, outlet, onLogout }) {
           <Icon name="chevron" className={'h-4 w-4 text-white/50 transition ' + (menu ? 'rotate-180' : '')} />
         </button>
 
-        {menu && (
-          <div className="mt-2 space-y-1 rounded-xl bg-white/5 p-2">
-            <p className="px-2 py-1 text-[11px] text-white/50">
-              {outlet ? `${outlet.outlet_code} — ${outlet.outlet_name}` : 'Outlet aktif'}
-            </p>
-            <button
-              onClick={() => {
-                onLogout()
-                navigate('/login', { replace: true })
-              }}
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
-            >
-              <Icon name="back" className="h-4 w-4" /> Keluar
-            </button>
-          </div>
-        )}
-
         {groups.map((g) => (
           <div key={g.title}>
             <p className="px-4 pb-2 pt-6 text-[11px] font-bold uppercase tracking-wider text-white/40">
@@ -156,7 +139,22 @@ export default function Layout({ children, user, outlet, onLogout }) {
           </div>
         ))}
 
-        <div className="mt-auto rounded-xl bg-white/5 p-4">
+           <div className="mt-auto space-y-1 rounded-xl bg-white/5 p-2">
+            <p className="px-2 py-1 text-[11px] text-white/50">
+              {outlet ? `${outlet.outlet_code} | ${outlet.outlet_name}` : 'Outlet aktif'}
+            </p>
+            <button
+              onClick={() => {
+                onLogout()
+                navigate('/login', { replace: true })
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+            >
+              <Icon name="back" className="h-4 w-4" /> Keluar
+            </button>
+          </div>
+
+        <div className="mt-2 rounded-xl bg-white/5 p-4">
           <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">Mode POC</p>
           <p className="mt-1 text-[11px] leading-relaxed text-white/60">
             Berjalan tanpa backend. Data tersimpan di browser dan mengikuti kontrak REST

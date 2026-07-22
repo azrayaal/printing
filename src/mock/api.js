@@ -23,7 +23,7 @@ import { buildEscPos } from './escpos'
 
 const KEY = 'poc_pos_db_v2'
 const AUTH_KEY = 'poc_pos_auth_v2'
-const LATENCY = 220 // ms — mensimulasikan round-trip jaringan
+const LATENCY = 220 // ms | mensimulasikan round-trip jaringan
 
 const wait = (ms = LATENCY) => new Promise((r) => setTimeout(r, ms))
 const clone = (v) => JSON.parse(JSON.stringify(v))
@@ -164,7 +164,7 @@ export async function getCustomers() {
   return clone(state().customer)
 }
 
-/** POST /api/customers — daftarkan pelanggan baru dari layar kasir */
+/** POST /api/customers | daftarkan pelanggan baru dari layar kasir */
 export async function createCustomer({ customer_name, phone = '' }) {
   await wait(140)
   const d = state()
@@ -205,7 +205,7 @@ export async function getProducts(q = '') {
 
 /* ----------------------------------------------------------------- antrian */
 
-/** POST /api/queues — kios pengambilan nomor antrian */
+/** POST /api/queues | kios pengambilan nomor antrian */
 export async function takeQueue({ outlet_id, service_code, customer_name = '' }) {
   await wait(260)
   const d = state()
@@ -259,7 +259,7 @@ export async function getQueues(outletId) {
   )
 }
 
-/** POST /api/queues/call-next — panggil antrian berikutnya ke sebuah loket */
+/** POST /api/queues/call-next | panggil antrian berikutnya ke sebuah loket */
 export async function callNextQueue({ outlet_id, counter, cashier_id, service_code = null }) {
   await wait(200)
   const d = state()
@@ -293,7 +293,7 @@ export async function callNextQueue({ outlet_id, counter, cashier_id, service_co
   return clone(next)
 }
 
-/** PATCH /api/queues/:id — ubah status (served / skipped) */
+/** PATCH /api/queues/:id | ubah status (served / skipped) */
 export async function updateQueueStatus(queueId, status) {
   await wait(120)
   const d = state()
@@ -401,7 +401,7 @@ export async function getTransactions() {
     }))
 }
 
-/** GET /api/transactions/:id — header + lines + print history */
+/** GET /api/transactions/:id | header + lines + print history */
 export async function getTransaction(id) {
   await wait(120)
   const d = state()

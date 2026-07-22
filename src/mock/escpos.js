@@ -1,5 +1,5 @@
 /**
- * Pembentuk raw ESC/POS command — bukti konsep untuk printer thermal fisik.
+ * Pembentuk raw ESC/POS command | bukti konsep untuk printer thermal fisik.
  * Di backend nanti string ini bisa dikirim langsung ke printer via
  * node-thermal-printer / net socket ke port 9100.
  */
@@ -114,7 +114,7 @@ export function buildQueueEscPos(ticket) {
   return out.join('')
 }
 
-/** Versi yang bisa dibaca manusia — escape byte kontrol jadi <HEX>. */
+/** Versi yang bisa dibaca manusia | escape byte kontrol jadi <HEX>. */
 export function escPosPreview(raw) {
   return raw.replace(/[\x00-\x1F]/g, (c) => {
     if (c === '\x0A') return '\n'

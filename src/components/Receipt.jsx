@@ -8,7 +8,7 @@ const Row = ({ label, value, bold }) => (
 )
 
 /**
- * Struk thermal 80mm. Elemen ini yang dipakai window.print() —
+ * Struk thermal 80mm. Elemen ini yang dipakai window.print() |
  * lihat aturan @media print di src/index.css.
  */
 export default function Receipt({ trx, printType = 'original', copyNumber = 1, printable = true }) {
