@@ -6,10 +6,10 @@ import { formatTime } from '../utils/format'
 import { hentikanSuara, panggilAntrian } from '../utils/voice'
 
 const SERVICE_TONE = {
-  A: 'from-sky-500 to-blue-600',
-  B: 'from-brand-400 to-brand-600',
-  C: 'from-amber-400 to-orange-600',
-  D: 'from-emerald-400 to-emerald-600',
+  A: 'bg-sky-500',
+  B: 'bg-brand-400',
+  C: 'bg-amber-400',
+  D: 'bg-emerald-400',
 }
 
 const HARI = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
@@ -93,9 +93,9 @@ export default function DisplayAntrian() {
         {/* ---------- kepala ---------- */}
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
           <div className="flex items-center gap-4">
-            <span className="grid h-12 w-12 place-items-center rounded-xl bg-brand-grad">
+            {/* <span className="grid h-12 w-12 place-items-center rounded-xl bg-brand-grad">
               <Icon name="printer" className="h-6 w-6" />
-            </span>
+            </span> */}
             <div>
               <p className="text-xl font-semibold leading-tight">
                 {outlet?.outlet_name || 'Memuat…'}
@@ -144,13 +144,13 @@ export default function DisplayAntrian() {
         <section className="grid flex-1 gap-8 py-8 lg:grid-cols-[1.35fr_1fr]">
           <div
             className={
-              'relative overflow-hidden rounded-3xl border p-10 transition-all duration-500 ' +
+              'relative overflow-hidden border-2 border-red-600 rounded-3xl p-10 transition-all duration-500 ' +
               (flash
                 ? 'border-brand-400 bg-brand-500/15 shadow-[0_0_80px_-20px_rgba(233,30,99,0.8)]'
                 : 'border-white/10 bg-white/[0.04]')
             }
           >
-            <div className="absolute inset-x-0 top-0 h-1 bg-brand-grad" />
+            {/* <div className="absolute inset-x-0 top-0 h-1 bg-brand-grad" /> */}
             <p className="text-sm font-bold uppercase tracking-[0.4em] text-white/40">
               Nomor dipanggil
             </p>
